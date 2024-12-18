@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ettara Coffee House - Live Camera</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: white;
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+        .header {
+            background-color: #8b4513;
+            color: white;
+            text-align: center;
+            padding: 0.5rem 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .header img {
+            max-width: 150px; /* Increased logo size */
+            margin-bottom: 5px;
+        }
+        .header h1 {
+            font-size: 1.8rem; /* Smaller header text */
+            font-weight: 300;
+        }
+        .container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            text-align: center;
+        }
+        h2 {
+            color: #8b4513;
+            margin-bottom: 1.5rem;
+            font-weight: 400;
+        }
+        #video {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+        }
+        .button {
+            background-color: #8b4513;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 0.5rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .button:hover {
+            background-color: #a0522d;
+        }
+        #fileInput {
+            background-color: #d2691e;
+        }
+        #fileInput:hover {
+            background-color: #cd853f;
+        }
+        #results {
+            margin-top: 2rem;
+            background-color: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .detection-card {
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        .detection-card.error {
+            background-color: #ffdddd;
+            border: 1px solid #ff0000;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <img src="/static/logo.png" alt="Ettara Coffee House Logo">
+            <h1>Ettara Coffee House</h1>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Coffee Detection</h2>
+        <video id="video" autoplay></video>
+        <br>
+        <button class="button" id="capture">Analyze Coffee</button>
+        <input type="file" id="fileInput" class="button" accept="image/*" />
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const captureButton = document.getElementById('capture');
+        const fileInput = document.getElementById('fileInput');
+        const resultsDiv = document.getElementById('results');
+
+        let constraints = {
+            video: { facingMode: "environment" }
+        };
+
+        // Initialize camera stream
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error('Error accessing camera:', err);
+                resultsDiv.innerHTML = `
+                    <div class="detection-card error">
+                        <h3>Camera Error</h3>
+                        <p>Unable to access camera. Please check permissions.</p>
+                    </div>
+                `;
+            });
+
+        // Capture photo and send to server
+        captureButton.addEventListener('click', () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+
+            // Convert to base64
+            const imageData = canvas.toDataURL('image/jpeg');
+
+            // Clear previous results before displaying new ones
+            resultsDiv.style.display = 'none';
+            resultsDiv.innerHTML = '';
+
+            // Send to server
+            fetch('/detect', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image: imageData })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show new results
+                    resultsDiv.style.display = 'block';
+                    resultsDiv.innerHTML = '<h2>Coffee Analysis Results:</h2>';
+                    data.predictions.forEach(pred => {
+                        resultsDiv.innerHTML += `
+                            <div class="detection-card">
+                                <h3>${pred.class}</h3>
+                                <p>Confidence: ${(pred.confidence).toFixed(1)}%</p>
+                            </div>
+                        `;
+                    });
+                } else {
+                    // Show error message
+                    resultsDiv.style.display = 'block';
+                    resultsDiv.innerHTML = `
+                        <div class="detection-card error">
+                            <h3>Error</h3>
+                            <p>${data.error || 'Unable to process image'}</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                resultsDiv.style.display = 'block';
+                resultsDiv.innerHTML = `
+                    <div class="detection-card error">
+                        <h3>Error</h3>
+                        <p>Unable to process image. Please try again.</p>
+                    </div>
+                `;
+            });
+        });
+
+        // Handle file upload
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const imageData = event.target.result;
+                    fetch('/detect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ image: imageData })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            resultsDiv.style.display = 'block';
+                            resultsDiv.innerHTML = '<h2>Coffee Analysis Results:</h2>';
+                            data.predictions.forEach(pred => {
+                                resultsDiv.innerHTML += `
+                                    <div class="detection-card">
+                                        <h3>${pred.class}</h3>
+                                        <p>Confidence: ${(pred.confidence).toFixed(1)}%</p>
+                                    </div>
+                                `;
+                            });
+                        } else {
+                            resultsDiv.style.display = 'block';
+                            resultsDiv.innerHTML = `
+                                <div class="detection-card error">
+                                    <h3>Error</h3>
+                                    <p>${data.error || 'Unable to process image'}</p>
+                                </div>
+                            `;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        resultsDiv.style.display = 'block';
+                        resultsDiv.innerHTML = `
+                            <div class="detection-card error">
+                                <h3>Error</h3>
+                                <p>Unable to process image. Please try again.</p>
+                            </div>
+                        `;
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    </script>
+</body>
+</html>
