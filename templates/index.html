@@ -25,11 +25,11 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         .header img {
-            max-width: 150px; /* Increased logo size */
+            max-width: 150px;
             margin-bottom: 5px;
         }
         .header h1 {
-            font-size: 1.8rem; /* Smaller header text */
+            font-size: 1.8rem;
             font-weight: 300;
         }
         .container {
@@ -43,7 +43,7 @@
             margin-bottom: 1.5rem;
             font-weight: 400;
         }
-        #video {
+        #video, #annotatedImage {
             max-width: 100%;
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -85,6 +85,10 @@
             background-color: #ffdddd;
             border: 1px solid #ff0000;
         }
+        #annotatedImageContainer {
+            display: none;
+            margin-top: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -102,6 +106,11 @@
         <button class="button" id="capture">Analyze Coffee</button>
         <input type="file" id="fileInput" class="button" accept="image/*" />
         <div id="results"></div>
+        
+        <div id="annotatedImageContainer">
+            <h2>Annotated Image</h2>
+            <img id="annotatedImage" alt="Annotated Detection">
+        </div>
     </div>
 
     <script>
@@ -109,6 +118,8 @@
         const captureButton = document.getElementById('capture');
         const fileInput = document.getElementById('fileInput');
         const resultsDiv = document.getElementById('results');
+        const annotatedImageContainer = document.getElementById('annotatedImageContainer');
+        const annotatedImage = document.getElementById('annotatedImage');
 
         let constraints = {
             video: { facingMode: "environment" }
@@ -129,6 +140,39 @@
                 `;
             });
 
+        // Function to handle detection results
+        function handleDetectionResults(data) {
+            if (data.success) {
+                // Show new results
+                resultsDiv.style.display = 'block';
+                resultsDiv.innerHTML = '<h2>Coffee Analysis Results:</h2>';
+                data.predictions.forEach(pred => {
+                    resultsDiv.innerHTML += `
+                        <div class="detection-card">
+                            <h3>${pred.class}</h3>
+                            <p>Confidence: ${pred.confidence}%</p>
+                        </div>
+                    `;
+                });
+
+                // Show annotated image
+                if (data.annotated_image) {
+                    annotatedImageContainer.style.display = 'block';
+                    annotatedImage.src = data.annotated_image;
+                }
+            } else {
+                // Show error message
+                resultsDiv.style.display = 'block';
+                resultsDiv.innerHTML = `
+                    <div class="detection-card error">
+                        <h3>Error</h3>
+                        <p>${data.error || 'Unable to process image'}</p>
+                    </div>
+                `;
+                annotatedImageContainer.style.display = 'none';
+            }
+        }
+
         // Capture photo and send to server
         captureButton.addEventListener('click', () => {
             const canvas = document.createElement('canvas');
@@ -142,6 +186,7 @@
             // Clear previous results before displaying new ones
             resultsDiv.style.display = 'none';
             resultsDiv.innerHTML = '';
+            annotatedImageContainer.style.display = 'none';
 
             // Send to server
             fetch('/detect', {
@@ -152,30 +197,7 @@
                 body: JSON.stringify({ image: imageData })
             })
             .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Show new results
-                    resultsDiv.style.display = 'block';
-                    resultsDiv.innerHTML = '<h2>Coffee Analysis Results:</h2>';
-                    data.predictions.forEach(pred => {
-                        resultsDiv.innerHTML += `
-                            <div class="detection-card">
-                                <h3>${pred.class}</h3>
-                                <p>Confidence: ${(pred.confidence).toFixed(1)}%</p>
-                            </div>
-                        `;
-                    });
-                } else {
-                    // Show error message
-                    resultsDiv.style.display = 'block';
-                    resultsDiv.innerHTML = `
-                        <div class="detection-card error">
-                            <h3>Error</h3>
-                            <p>${data.error || 'Unable to process image'}</p>
-                        </div>
-                    `;
-                }
-            })
+            .then(handleDetectionResults)
             .catch(error => {
                 console.error('Error:', error);
                 resultsDiv.style.display = 'block';
@@ -195,6 +217,12 @@
                 const reader = new FileReader();
                 reader.onload = function(event) {
                     const imageData = event.target.result;
+                    
+                    // Clear previous results
+                    resultsDiv.style.display = 'none';
+                    resultsDiv.innerHTML = '';
+                    annotatedImageContainer.style.display = 'none';
+
                     fetch('/detect', {
                         method: 'POST',
                         headers: {
@@ -203,28 +231,7 @@
                         body: JSON.stringify({ image: imageData })
                     })
                     .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            resultsDiv.style.display = 'block';
-                            resultsDiv.innerHTML = '<h2>Coffee Analysis Results:</h2>';
-                            data.predictions.forEach(pred => {
-                                resultsDiv.innerHTML += `
-                                    <div class="detection-card">
-                                        <h3>${pred.class}</h3>
-                                        <p>Confidence: ${(pred.confidence).toFixed(1)}%</p>
-                                    </div>
-                                `;
-                            });
-                        } else {
-                            resultsDiv.style.display = 'block';
-                            resultsDiv.innerHTML = `
-                                <div class="detection-card error">
-                                    <h3>Error</h3>
-                                    <p>${data.error || 'Unable to process image'}</p>
-                                </div>
-                            `;
-                        }
-                    })
+                    .then(handleDetectionResults)
                     .catch(error => {
                         console.error('Error:', error);
                         resultsDiv.style.display = 'block';
