@@ -1,13 +1,20 @@
+import os
 import cv2
 import numpy as np
 import base64
 from flask import Flask, render_template, jsonify, request
+from flask_cors import CORS
 from ultralytics import YOLO
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
+
+# Determine model path dynamically
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, 'Models', 'best.pt')
 
 # Load the trained YOLO model
-model = YOLO('Models/best.pt')  # Path to your trained weights
+model = YOLO(MODEL_PATH)
 
 def draw_bounding_boxes(image, results):
     """
@@ -101,4 +108,4 @@ def detect():
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)
