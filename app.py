@@ -6,7 +6,7 @@ from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 from ultralytics import YOLO
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app)  # Enable CORS for all routes
 
 # Determine model path dynamically
@@ -108,4 +108,4 @@ def detect():
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5050, ssl_context=('cert.pem', 'key.pem'))
